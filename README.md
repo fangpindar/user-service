@@ -1,227 +1,263 @@
 # User Service
 
-A Spring Boot member-service API featuring email-based registration with **two-phase activation**, **2FA email OTP login**, refresh-token rotation, and a self-service `/me/last-login` endpoint.
+一個會員服務 API，提供 email 註冊、**雙階段啟用**、**Email OTP 兩階段認證登入**、Refresh Token Rotation、以及自助查詢「最後登入時間」的端點。
 
-Built as an interview deliverable demonstrating production-style backend practices: Flyway migrations, Redis-backed rate limiting, BCrypt password hashing, OTP brute-force protection, JWT access + refresh token rotation with blacklist, and integration tests on real Postgres + Redis via Testcontainers.
-
----
-
-## Online Demo
-
-> **Swagger UI:** `http://<ec2-public-dns>/swagger-ui.html`
-
-The deployed instance runs on AWS EC2 (Amazon Linux 2023, t2.micro free tier) using docker-compose. URL is the EC2 default DNS name; HTTP only (production would terminate TLS at ALB / Caddy / Nginx with a real domain + ACM cert).
+作為面試交付專案，展示 production-style 的後端工程實務：Flyway 資料庫 migration、Redis-backed rate limiting、BCrypt 密碼雜湊、OTP 暴力破解防護、JWT access + refresh token rotation 與 blacklist，並用 Testcontainers 在真實 PostgreSQL + Redis 上跑整合測試。
 
 ---
 
-## Quick Start (Local)
+## 線上 Demo
 
-### Prerequisites
+> **Swagger UI**：`http://<ec2-public-dns>/swagger-ui.html`
+
+部署於 AWS EC2（Amazon Linux 2023, t2.micro free tier）使用 docker-compose。URL 為 EC2 default DNS；HTTP only（production 會在 ALB / Caddy / Nginx 終止 TLS，並使用真實 domain + ACM 憑證）。
+
+---
+
+## 快速開始（本機）
+
+### 前置需求
 - Docker + Docker Compose
-- (Optional, for direct dev) Java 21, Maven 3.9+
+- （選用，直接開發用）Java 21、Maven 3.9+
 
-### Run with docker-compose
+### 用 docker-compose 啟動
 ```bash
 git clone <this-repo>
 cd <repo>
 cp .env.example .env
 
-# Edit .env. The only thing you MUST change for activation/OTP emails to actually
-# arrive in your inbox is SENDGRID_API_KEY (otherwise emails are logged to stdout —
-# which is fine for testing, just check `docker compose logs app`).
+# 編輯 .env。要讓啟用信、OTP 信真的進到信箱，必須設 SENDGRID_API_KEY
+# （否則信會印到 stdout，檢查 docker compose logs app 也行，這對測試已足夠）
 $EDITOR .env
 
 docker compose up -d
-docker compose logs -f app    # wait for "Started UserServiceApplication"
+docker compose logs -f app    # 等到 "Started UserServiceApplication"
 ```
 
-Open Swagger:
+打開 Swagger：
 - http://localhost/swagger-ui.html
 
-### Run tests
+### 跑測試
 ```bash
 mvn test
 ```
-Integration tests use Testcontainers — Docker must be running.
+整合測試使用 Testcontainers，請確認 Docker 已啟動。
 
 ---
 
-## API (9 endpoints)
+## API（共 9 個端點）
 
-| Method | Path | Auth | Purpose |
+| Method | Path | Auth | 用途 |
 |---|---|---|---|
-| POST | `/api/v1/auth/register` | – | Register, status PENDING_ACTIVATION, send activation email |
-| POST | `/api/v1/auth/resend-activation` | – | Resend activation email (rate-limited) |
-| GET  | `/api/v1/auth/activate?token=xxx` | – | Show confirmation page (HTML, no side effect) |
-| POST | `/api/v1/auth/activate` | – | Actually activate the account |
-| POST | `/api/v1/auth/login` | – | Phase 1: validate credentials, send OTP |
-| POST | `/api/v1/auth/verify-otp` | – | Phase 2: verify OTP, issue JWT pair |
-| POST | `/api/v1/auth/refresh` | refresh | Rotate token pair |
-| POST | `/api/v1/auth/logout` | bearer | Blacklist access, revoke all refresh |
-| GET  | `/api/v1/users/me/last-login` | bearer | Return caller's last login (taken from JWT — no `/users/{id}` form) |
+| POST | `/api/v1/auth/register` | – | 註冊（建立 PENDING_ACTIVATION user，寄啟用信） |
+| POST | `/api/v1/auth/resend-activation` | – | 重寄啟用信（rate-limited） |
+| GET  | `/api/v1/auth/activate?token=xxx` | – | 顯示啟用確認頁面（HTML，無副作用） |
+| POST | `/api/v1/auth/activate` | – | 真正啟用帳號 |
+| POST | `/api/v1/auth/login` | – | Phase 1：驗帳密、寄 OTP |
+| POST | `/api/v1/auth/verify-otp` | – | Phase 2：驗 OTP、發 JWT pair |
+| POST | `/api/v1/auth/refresh` | refresh | Token rotation |
+| POST | `/api/v1/auth/logout` | bearer | 登出（黑名單 access、清空 refresh） |
+| GET  | `/api/v1/users/me/last-login` | bearer | 查自己最後登入時間（從 JWT 解 userId，無 `/users/{id}` 入口） |
 
-Full request/response schemas: open the Swagger UI.
+完整 request/response schema：請開 Swagger UI 查看。
 
 ---
 
-## Two-Phase Activation (defeats email link scanners)
+## 雙階段啟用（防 email 連結掃描器）
 
 ```
 POST /register
-        ↓ user record created (PENDING_ACTIVATION)
-        ↓ activation_token row stored
-        ↓ SendGrid email sent with link to /activate?token=xxx
-        
-User clicks link in email
+        ↓ 建立 user (PENDING_ACTIVATION)
+        ↓ 寫 activation_token row
+        ↓ SendGrid 寄信，內含 /activate?token=xxx 連結
+
+使用者點 email 連結
         ↓
-GET /activate?token=xxx        ← server validates token READ-ONLY
-        ↓ returns HTML confirmation page with [Activate] button
+GET /activate?token=xxx        ← server 驗 token READ-ONLY
+        ↓ 回含「Activate」按鈕的 HTML 頁面
         ↓
-User clicks [Activate]
+使用者點「Activate」按鈕
         ↓
-POST /activate { token }       ← server flips status=ACTIVE, marks token used
+POST /activate { token }       ← server 把 status 翻成 ACTIVE，token 標記 used
 ```
 
-**Why two phases?** Corporate email security (Outlook Safe Links, Gmail Preview, Mimecast) auto-fetches links. If activation happened on `GET`, scanners would silently activate accounts. The `GET` endpoint is purely a confirmation page; the actual state change happens on `POST` triggered by a real human click.
+**為什麼要分兩階段？** 企業 email 安全產品（Outlook Safe Links、Gmail 預覽、Mimecast）會自動 fetch 連結。如果啟用直接做在 `GET`，掃描器會無聲無息地啟用帳號。`GET` 純粹顯示確認頁；實際狀態變更只發生在 `POST`（由真人按下按鈕觸發）。
 
 ---
 
-## Two-Factor Login
+## 兩階段認證登入
 
 ```
 POST /login {email, password}
-        ↓ Redis check: login_fail:{email} >= 5 → 423 Locked
-        ↓ BCrypt compare password
-        ↓ generate 6-digit OTP, BCrypt-hash it
+        ↓ Redis 檢查：login_fail:{email} >= 5 → 423 Locked
+        ↓ BCrypt 比對密碼
+        ↓ 產生 6 位 OTP，BCrypt-hash 後存進 Redis
         ↓ Redis: SET otp:{challengeId} {userId, codeHash, attempts:0} EX 300
-        ↓ SendGrid email with OTP code
-        ↓ returns { challengeId, expiresInSeconds: 300 }
+        ↓ SendGrid 寄 OTP 信
+        ↓ 回 { challengeId, expiresInSeconds: 300 }
 
 POST /verify-otp { challengeId, code }
         ↓ Redis: HGETALL otp:{challengeId}
         ↓ if attempts >= 3 → DEL key → 401
-        ↓ if BCrypt mismatch → HINCRBY attempts → 401
+        ↓ if BCrypt 不符 → HINCRBY attempts → 401
         ↓ DEL otp:{challengeId}, DEL login_fail:{email}
         ↓ INSERT login_audit; UPDATE users.last_login_at
-        ↓ issue access JWT (15m) + refresh JWT (7d)
+        ↓ 簽 access JWT (15 分鐘) + refresh JWT (7 天)
         ↓ Redis: SET refresh:{userId}:{jti} 1 EX 604800
-        ↓ returns { accessToken, refreshToken, expiresInSeconds: 900 }
+        ↓ 回 { accessToken, refreshToken, expiresInSeconds: 900 }
 ```
 
-Brute-force bound: 6-digit OTP (1 in 1,000,000) × 3 attempts/challenge × 5 challenges/15min lockout = at most 15 guesses per 15 minutes per email.
+**暴力破解上限**：6 位 OTP（百萬分之一） × 3 次/challenge × 5 challenges/15 分鐘 lockout
+= 每個 email 每 15 分鐘最多 15 次嘗試，攻擊不可行。
 
 ---
 
 ## Refresh Token Rotation
 
-`POST /refresh { refreshToken }`:
-1. Verify JWT signature with the **refresh** secret (separate from access secret).
-2. Look up `refresh:{userId}:{jti}` in Redis. If missing → already used or revoked → 401.
-3. **Delete the old key immediately** — replaying that refresh token will now fail.
-4. Issue a new access + new refresh (with fresh jti).
-5. Store the new refresh key, return both tokens.
+`POST /refresh { refreshToken }`：
+1. 用 **refresh** secret 驗證 JWT 簽章（與 access secret 分開）。
+2. Redis 查 `refresh:{userId}:{jti}`。不存在 → 已使用或撤銷 → 401。
+3. **立刻 DEL 舊 key** —— 該 refresh 重放會失敗。
+4. 簽新的 access + 新的 refresh（新 jti）。
+5. 寫入新的 refresh key，回傳新的 token pair。
 
-The integration test [`AuthFlowIntegrationTest.happyPath`](src/test/java/com/example/userservice/integration/AuthFlowIntegrationTest.java) exercises this: replay of the consumed refresh token returns 401.
-
----
-
-## Logout & Access Token Blacklist
-
-`POST /logout` (with Bearer access token):
-1. Parse access JWT → extract `jti` and `exp`.
-2. `SET blacklist:{jti} 1 EX (exp - now)` — auto-expires when the token would have expired anyway.
-3. `SCAN refresh:{userId}:* | DEL` — wipes all refresh tokens for the user (logout everywhere).
-
-Every authenticated request goes through `JwtAuthenticationFilter`, which after parsing the token does `EXISTS blacklist:{jti}` and rejects if found.
+整合測試 [`AuthFlowIntegrationTest.happyPath`](src/test/java/com/example/userservice/integration/AuthFlowIntegrationTest.java) 驗證了這個行為：消費過的 refresh token 重放會回 401。
 
 ---
 
-## Limits & TTLs
+## 登出與 Access Token 黑名單
 
-| Setting | Value | Backed by |
+`POST /logout`（帶 Bearer access token）：
+1. 解析 access JWT → 取 `jti` 與 `exp`。
+2. `SET blacklist:{jti} 1 EX (exp - now)` —— 等 token 自然到期就自動清掉。
+3. `SCAN refresh:{userId}:* | DEL` —— 清除該 user 所有 refresh token（多裝置一次踢光）。
+
+每個 authenticated 請求經過 `JwtAuthenticationFilter` 時，解析 token 後都會 `EXISTS blacklist:{jti}`，存在即拒絕。
+
+---
+
+## 限制與時效
+
+| 設定 | 值 | 由誰管 |
 |---|---|---|
-| Activation token TTL | 24h | `activation_tokens.expires_at` |
-| Resend activation cooldown | 60s per email | Redis `resend_cd:{email}` |
-| Resend activation daily cap | 5 / 24h | Redis `resend_count:{email}` |
-| Password failure lock | 5 fails → 15 min | Redis `login_fail:{email}` |
-| OTP TTL | 5 min | Redis `otp:{challengeId}` |
-| OTP attempts | 3 / challenge | Redis hash field `attempts` |
-| Access JWT TTL | 15 min | JWT `exp` claim |
-| Refresh JWT TTL | 7 days | Redis `refresh:{userId}:{jti}` |
+| Activation token TTL | 24 小時 | `activation_tokens.expires_at` |
+| Resend activation 冷卻 | 60 秒/email | Redis `resend_cd:{email}` |
+| Resend activation 每日上限 | 5 / 24h | Redis `resend_count:{email}` |
+| 密碼失敗鎖定 | 5 次 → 鎖 15 分鐘 | Redis `login_fail:{email}` |
+| OTP TTL | 5 分鐘 | Redis `otp:{challengeId}` |
+| OTP 嘗試上限 | 3 次/challenge | Redis hash field `attempts` |
+| Access JWT TTL | 15 分鐘 | JWT `exp` claim |
+| Refresh JWT TTL | 7 天 | Redis `refresh:{userId}:{jti}` |
 
-All values configurable via `application.yml` / env vars.
+所有值可透過 `application.yml` / 環境變數調整。
 
 ---
 
-## Environment Variables
+## 環境變數
 
-| Var | Required | Description |
+| Var | 必要 | 說明 |
 |---|---|---|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | yes | Postgres connection |
-| `REDIS_HOST`, `REDIS_PORT` | yes | Redis connection |
-| `JWT_ACCESS_SECRET` | yes | ≥32 bytes random; `openssl rand -base64 48` |
-| `JWT_REFRESH_SECRET` | yes | Different ≥32 bytes random |
-| `SENDGRID_API_KEY` | optional | If empty, emails are logged to stdout (`LoggingEmailService`); if set, real SendGrid send |
-| `EMAIL_FROM` | yes | Sender address (must be a SendGrid Verified Sender if real send) |
-| `APP_BASE_URL` | yes | Public URL (e.g. `http://ec2-x.compute.amazonaws.com`); becomes the prefix in activation email links |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | yes | Postgres 連線 |
+| `REDIS_HOST`, `REDIS_PORT` | yes | Redis 連線 |
+| `JWT_ACCESS_SECRET` | yes | ≥32 bytes 隨機字串；`openssl rand -base64 48` |
+| `JWT_REFRESH_SECRET` | yes | 另一個獨立 ≥32 bytes 隨機字串 |
+| `SENDGRID_API_KEY` | optional | 為空：用 `LoggingEmailService` 印到 stdout；有設：真寄信 |
+| `EMAIL_FROM` | yes | 寄件人地址（必須是 SendGrid Verified Sender） |
+| `APP_BASE_URL` | yes | 公開 URL（如 `http://ec2-x.compute.amazonaws.com`），會成為啟用信連結的 prefix |
 
 ---
 
-## Project Layout
+## 專案結構（按 feature 分層 + interface/impl 分離）
 
 ```
 src/main/java/com/example/userservice/
-├── auth/        registration, activation, login, OTP, JWT, refresh, logout
-├── user/        User entity, /me/last-login
-├── email/       SendGrid + LoggingEmailService (interface-based, easy to mock in tests)
-├── ratelimit/   Redis-backed rate limit primitives
-├── config/      Security, Redis, OpenAPI, properties classes
-└── common/      Global exception handler, ApiError, custom domain exceptions
+├── auth/
+│   ├── controller/      AuthController, ActivationController
+│   ├── dto/             所有 request / response DTO（Java records）
+│   ├── jwt/             JwtAuthenticationFilter, JwtTokenProvider, UserPrincipal
+│   ├── service/         7 個 interface（RegistrationService, ActivationService,
+│   │                    LoginService, OtpService, TokenService, LogoutService,
+│   │                    ResendActivationService）
+│   └── service/impl/    @Service 實作類別（命名 *Impl）
+│
+├── user/
+│   ├── controller/      UserController（GET /me/last-login）
+│   ├── dto/             LastLoginResponse
+│   ├── entity/          User, UserStatus, ActivationToken, LoginAudit
+│   ├── repository/      UserRepository, ActivationTokenRepository, LoginAuditRepository
+│   ├── service/         UserQueryService（interface）
+│   └── service/impl/    UserQueryServiceImpl
+│
+├── email/
+│   ├── service/         EmailService（interface）
+│   ├── service/impl/    SendGridEmailService, LoggingEmailService
+│   └── template/        ActivationEmailTemplate, OtpEmailTemplate
+│
+├── ratelimit/
+│   ├── service/         RateLimitService（interface）
+│   └── service/impl/    RateLimitServiceImpl
+│
+├── common/
+│   ├── exception/       GlobalExceptionHandler, ApiError
+│   │   └── domain/      自訂 exception（AppException 抽象基底 + 7 個子類）
+│   └── util/            SecureTokenGenerator
+│
+└── config/              SecurityConfig, RedisConfig, OpenApiConfig, EmailConfig
+    └── properties/      JwtProperties, AppProperties
+
 src/main/resources/
 ├── application.yml
-└── db/migration/V1..V4__*.sql           Flyway versioned schema
+└── db/migration/V1..V4__*.sql            Flyway 版本化 schema
+
 src/test/java/com/example/userservice/
-├── integration/AuthFlowIntegrationTest  9 end-to-end scenarios
-└── support/                             InMemoryEmailService, IntegrationTestBase
+├── integration/AuthFlowIntegrationTest    9 個端對端場景
+└── support/                               InMemoryEmailService, IntegrationTestBase
 ```
 
----
-
-## Design Decisions (and why)
-
-- **Two-phase activation (GET → POST)** — defeats email link scanners that auto-fetch URLs.
-- **Refresh token as JWT (not opaque UUID)** — server can verify the signature and extract `userId` *before* a Redis lookup, so the Redis key structure can be `refresh:{userId}:{jti}` (per-user namespacing makes "logout-all-devices" a simple `SCAN`).
-- **OTP stored as BCrypt hash** — even a Redis dump doesn't leak active OTPs.
-- **Both `users.last_login_at` (denormalised) and `login_audit` (full history)** — the API uses the column for O(1) reads; the audit table preserves a real record for security investigations.
-- **Email enumeration defence** — `/login` returns the same 401 for "user not found" and "wrong password"; `/resend-activation` returns the same 200 for unknown / already-active / pending users, so the endpoint can't be used to harvest registered emails.
-- **HTML inline in controller, not Thymeleaf** — the activation confirmation page is two screens of HTML; Thymeleaf would be more dependencies for negligible benefit.
-- **`LoggingEmailService` fallback** — lets you run the project end-to-end without a SendGrid account; codes/links print to `docker compose logs app`.
+**結構原則**：
+- 每個 feature package（`auth/`、`user/`、`email/`、`ratelimit/`）內部都採用 `controller/` + `service/` + `service/impl/` 的一致組織。
+- Service 一律先定義 interface，實作類別放 `service/impl/` 並以 `*Impl` 命名 ——  日後要替換實作（如把 SendGrid 換成 SES）只動 impl 不影響 caller。
+- Entity 與 Repository 只在 `user/` 出現（DDD 上他們屬於 User aggregate）。
+- 用 record 帶在 interface 裡（如 `TokenService.TokenPair`、`OtpService.Issued`），不用另外建 dto package 放 service 內部使用的小資料載體。
 
 ---
 
-## Deploying to AWS EC2
+## 設計決策（為什麼這樣選）
 
-### One-command deploy (recommended)
+- **雙階段啟用（GET → POST）** —— 防 email 掃描器自動 fetch 連結造成帳號被誤觸啟用。
+- **Refresh token 用 JWT，不用 opaque UUID** —— server 可以先用 refresh secret 驗簽章解出 `userId`，再去 Redis 查；這樣 Redis key 結構可以是 `refresh:{userId}:{jti}`（每個 user 獨立 namespace），實作「全裝置登出」就只需一個 `SCAN`。
+- **OTP 存 BCrypt hash** —— 即使 Redis 被 dump 也不會直接洩漏正在生效的 OTP。
+- **同時保留 `users.last_login_at`（denormalized）與 `login_audit`（完整歷史）** —— API 用 column 做 O(1) 讀取；audit table 保留實際紀錄供安全調查或未來 login history feature。
+- **Email enumeration 防護** —— `/login` 對「使用者不存在」與「密碼錯誤」回同個 401；`/resend-activation` 對未知 / 已啟用 / PENDING 都回同個 200，所以無法當作工具來蒐集已註冊的 email。
+- **Activation 確認頁直接 inline 在 controller，不引入 Thymeleaf** —— 該頁只有兩螢幕的 HTML，引入模板引擎不划算。
+- **`LoggingEmailService` fallback** —— 讓專案在沒 SendGrid 帳號的環境也能完整跑；連結與 OTP code 都會印到 `docker compose logs app`。
+- **按 feature 分層 + interface/impl 分離** —— 同一個 feature 的 controller / service / repository 集中在一起易追蹤；interface 與 impl 分離讓未來換實作或寫測試 mock 都更乾淨。
 
-There are two scripts under `scripts/` that automate the whole flow:
+---
+
+## 部署到 AWS EC2
+
+### 一鍵部署（推薦）
+
+`scripts/` 下有兩支腳本自動化整個流程：
 
 ```bash
-# Provision EC2 + security group + key pair, then docker compose up.
-# Idempotent — safe to re-run after a `git push`, will redeploy in place.
+# Provision EC2 + security group + key pair，然後 docker compose up。
+# 冪等 —— git push 後重跑會就地 redeploy 同一個 instance。
 ./scripts/aws-deploy.sh
 
-# When you're done with the demo, tear everything down so you don't get billed.
+# Demo 結束後拆掉所有資源，避免超出 free tier 計費。
 ./scripts/aws-teardown.sh
 ```
 
-Prerequisites:
-- AWS CLI configured (`aws sts get-caller-identity` works)
-- `jq` installed (`brew install jq`)
-- A filled-in local `.env` (the script validates required values before touching AWS)
+**前置需求**：
+- AWS CLI 已 configured（`aws sts get-caller-identity` 能成功）
+- `jq` 已安裝（`brew install jq`）
+- 本機 `.env` 已填好（腳本會在動 AWS 之前先驗證所有必要值）
 
-Defaults (override via env vars):
+**預設值**（可用環境變數覆蓋）：
 
-| Var | Default |
+| Var | 預設值 |
 |---|---|
 | `AWS_REGION` | `ap-northeast-1` |
 | `INSTANCE_TYPE` | `t2.micro` |
@@ -229,91 +265,117 @@ Defaults (override via env vars):
 | `GITHUB_REPO` | `https://github.com/fangpindar/user-service.git` |
 | `GITHUB_BRANCH` | `main` |
 
-What `aws-deploy.sh` does:
-1. Validates `.env` has real values (not placeholders) for `SENDGRID_API_KEY`, JWT secrets, `DB_PASSWORD`, etc.
-2. Creates an SSH key pair (saves private key to `~/.ssh/<project>-key.pem`).
-3. Creates a security group: SSH (22) **only from your current public IP**, HTTP (80) from anywhere.
-4. Looks up the latest Amazon Linux 2023 AMI and launches a `t2.micro` instance.
-5. Installs Docker + git, clones your GitHub repo, scp's `.env` (with `APP_BASE_URL` rewritten to the EC2 public DNS), and runs `docker compose up -d`.
-6. Polls `/actuator/health` until it returns `UP`, then prints the Swagger URL.
+**`aws-deploy.sh` 做了什麼**：
+1. 驗證 `.env` 包含真實值（非 placeholder）：`SENDGRID_API_KEY`、JWT secrets、`DB_PASSWORD` 等。
+2. 建立 SSH key pair（私鑰存於 `~/.ssh/<project>-key.pem`）。
+3. 建立 security group：SSH (22) **只開給您當前的公網 IP**，HTTP (80) 全網開放。
+4. 找最新 Amazon Linux 2023 AMI，啟動 `t2.micro` instance。
+5. 安裝 Docker + git + buildx，git clone repo，scp `.env`（會自動把 `APP_BASE_URL` 改成 EC2 public DNS），執行 `docker compose up -d`。
+6. 輪詢 `/actuator/health` 直到 `UP`，印出 Swagger URL。
 
-Re-running the script after pushing to GitHub will git-pull on the instance and `docker compose up --build`, so iterating is one command.
+push 到 GitHub 後重跑這支腳本，會在 instance 上 git pull 並 `docker compose up --build`。迭代只需一個指令。
 
-### Manual setup (only if you don't want the script)
+### 手動部署（不想用腳本時）
 
-#### Create instance
-- AMI: Amazon Linux 2023
-- Size: t2.micro (free tier; t3.micro also fine)
-- Storage: 20 GB gp3 (free tier covers up to 30 GB)
-- Region: ap-northeast-1 (Tokyo) recommended for low latency from TW
-- (Optional) Allocate an Elastic IP and associate it — free tier includes 1 EIP **as long as it's attached** to a running instance
+#### 建立 instance
+- AMI：Amazon Linux 2023
+- 大小：t2.micro（free tier；t3.micro 也可以）
+- 儲存：20 GB gp3（free tier 涵蓋 30 GB 以下）
+- Region：ap-northeast-1（東京，TW 延遲低）
+- （選用）申請 Elastic IP 並 attach —— free tier 有 1 個 EIP **只要綁在執行中的 instance** 就免費
 
-### Security Group
-| Direction | Port | Source |
+#### Security Group
+| 方向 | Port | 來源 |
 |---|---|---|
-| Inbound | 22 (SSH) | your IP only |
-| Inbound | 80 (HTTP) | 0.0.0.0/0 |
-| Outbound | all | 0.0.0.0/0 |
+| Inbound | 22（SSH） | 您本機 IP |
+| Inbound | 80（HTTP） | 0.0.0.0/0 |
+| Outbound | 全部 | 0.0.0.0/0 |
 
-### On the instance
+#### 在 instance 上執行
 ```bash
 sudo dnf install -y docker git
 sudo systemctl enable --now docker
 sudo usermod -aG docker ec2-user
-exit                          # re-SSH so the new group takes effect
+exit                          # 重新 SSH 讓新 group 生效
 ssh ec2-user@<your-ec2>
 
-# Install Docker Compose plugin
+# 安裝 Docker Compose plugin
 sudo mkdir -p /usr/local/lib/docker/cli-plugins
 sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-# Clone & configure
+# 安裝 buildx（compose v2 需要）
+sudo curl -SL https://github.com/docker/buildx/releases/download/v0.18.0/buildx-v0.18.0.linux-amd64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-buildx
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+
+# Clone & 設定
 git clone https://github.com/<you>/<repo>.git
 cd <repo>
 cp .env.example .env
 
-# Edit .env — must set:
-#   APP_BASE_URL=http://<ec2-public-dns>      (used in activation email links)
-#   JWT_ACCESS_SECRET, JWT_REFRESH_SECRET     (openssl rand -base64 48)
-#   SENDGRID_API_KEY, EMAIL_FROM              (SendGrid Verified Sender)
-#   DB_PASSWORD                                (something not "changeme")
+# 編輯 .env —— 必須設定：
+#   APP_BASE_URL=http://<ec2-public-dns>     （啟用信連結會用）
+#   JWT_ACCESS_SECRET, JWT_REFRESH_SECRET    （openssl rand -base64 48）
+#   SENDGRID_API_KEY, EMAIL_FROM             （SendGrid Verified Sender）
+#   DB_PASSWORD                              （非 "changeme"）
 $EDITOR .env
 
 docker compose up -d
-docker compose logs -f app    # wait for "Started UserServiceApplication"
+docker compose logs -f app    # 等 "Started UserServiceApplication"
 ```
 
-Open Swagger from your laptop:
+從筆電打開 Swagger：
 ```
 http://<ec2-public-dns>/swagger-ui.html
 ```
 
-### Notes
-- The container maps host port 80 → app container port 8080 (`docker-compose.yml`), so the URL has no port suffix.
-- This is HTTP only. For production you'd put Caddy or Nginx in front with Let's Encrypt (requires a real domain you control, which the EC2 default DNS does not satisfy).
+#### 注意事項
+- Container 把 host port 80 對到 app container port 8080（`docker-compose.yml`），所以 URL 不需要帶 port number。
+- 純 HTTP（無 TLS）。Production 會用 Caddy / Nginx + Let's Encrypt（需要您擁有的真實 domain，EC2 default DNS 拿不到憑證）。
 
 ---
 
-## Troubleshooting
+## 故障排除
 
-**No activation/OTP email received:**
-- Check `docker compose logs app` — if `LoggingEmailService` fired, you'll see the link/code printed there. Set `SENDGRID_API_KEY` and a SendGrid Verified Sender for `EMAIL_FROM` to enable real email.
-- SendGrid free tier sometimes routes to spam; check your spam folder.
+**收不到啟用 / OTP 信：**
+- 看 `docker compose logs app`：如果 `LoggingEmailService` 觸發，連結 / OTP code 會直接印在那裡。要真的寄信，需設 `SENDGRID_API_KEY` 並把 `EMAIL_FROM` 設成 SendGrid 的 Verified Sender。
+- SendGrid free tier 有時會被分到 spam，請檢查垃圾信件夾。
 
-**Activation link in email points to `localhost`:**
-- `APP_BASE_URL` in `.env` is wrong. On EC2 it must be `http://<ec2-public-dns>`. Restart with `docker compose down && docker compose up -d` after editing.
+**收到的 email 顯示連結是 `https://`，但您設的是 `http://`：**
+- SendGrid Click Tracking 預設會包裝所有連結成 `https://*.ct.sendgrid.net/...`，redirect 到您原本的 `http://`。**直接點按鈕會通**（HTTPS → HTTP redirect 是允許的）。
+- 想關掉：SendGrid Dashboard → **Settings → Tracking → Click Tracking** → toggle OFF。
 
-**`mvn test` fails with Testcontainers errors:**
-- Make sure Docker Desktop is running. Tests pull `postgres:16-alpine` and `redis:7-alpine` images on first run.
+**啟用信內的連結指向 `localhost`：**
+- `.env` 裡的 `APP_BASE_URL` 沒改。在 EC2 上必須是 `http://<ec2-public-dns>`。改完後 `docker compose down && docker compose up -d`。
+
+**`mvn test` 失敗於 Testcontainers errors：**
+- 確認 Docker Desktop 已啟動。第一次跑會 pull `postgres:16-alpine` 與 `redis:7-alpine`。
+
+**EC2 instance 沒響應、SSH 連不上：**
+- t2.micro 只有 1GB RAM。當記憶體吃滿到 OOM 時，整個 instance 會卡住（連 SSH 都連不上）。**解法是加 swap**：
+  ```bash
+  ssh -i ~/.ssh/denden-user-service-key.pem ec2-user@<host>
+  sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
+  sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
+  ```
+  本專案的部署 instance 已經做過這步處理，1GB swap 提供足夠的緩衝。
+
+**改了本機 `DB_PASSWORD` 但 app 連不上 DB：**
+- PostgreSQL 只在 volume 第一次建立時用 `POSTGRES_PASSWORD`，之後忽略。改了密碼就要砍 volume：
+  ```bash
+  docker compose down -v   # -v 會刪掉 pgdata volume
+  docker compose up -d
+  ```
 
 ---
 
-## Known Limitations / Future Work
+## 已知限制與未來改進
 
-- HTTP-only deployment (no TLS) — interview demo simplicity. Production would terminate TLS at a reverse proxy with ACM/Let's Encrypt cert on a real domain.
-- No CI/CD pipeline (intentionally out of scope).
-- Single-instance deployment — for HA you'd need multiple app instances behind a load balancer, plus Redis replicas.
-- No password reset flow.
-- No admin/staff endpoints (none required by the spec; `/me/*` is intentionally the only personal-data endpoint).
+- **HTTP-only 部署（無 TLS）** —— 面試 demo 簡化用。Production 會在 reverse proxy 終止 TLS（ACM / Let's Encrypt 憑證 + 自己擁有的 domain）。
+- **沒 CI/CD pipeline** —— 特意排除作業範圍外。
+- **單一 instance 部署** —— 要 HA 需在 ALB 後放多個 app instance + Redis 主從複製。
+- **沒密碼 reset flow** —— 題目沒要求。
+- **沒 admin / staff 端點** —— 題目只要求個人查詢；`/me/*` 是唯一個人資料端點，刻意這樣設計（避免任何「查別人」的入口）。
