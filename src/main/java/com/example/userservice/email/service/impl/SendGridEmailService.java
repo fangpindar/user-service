@@ -1,6 +1,7 @@
-package com.example.userservice.email;
+package com.example.userservice.email.service.impl;
 
 import com.example.userservice.config.properties.AppProperties;
+import com.example.userservice.email.service.EmailService;
 import com.example.userservice.email.template.ActivationEmailTemplate;
 import com.example.userservice.email.template.OtpEmailTemplate;
 import com.sendgrid.Method;

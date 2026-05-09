@@ -1,7 +1,8 @@
-package com.example.userservice.user;
+package com.example.userservice.user.controller;
 
 import com.example.userservice.auth.jwt.UserPrincipal;
 import com.example.userservice.user.dto.LastLoginResponse;
+import com.example.userservice.user.service.UserQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;

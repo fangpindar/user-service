@@ -1,6 +1,6 @@
 package com.example.userservice.support;
 
-import com.example.userservice.email.EmailService;
+import com.example.userservice.email.service.EmailService;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 

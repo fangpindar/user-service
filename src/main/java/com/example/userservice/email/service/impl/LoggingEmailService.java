@@ -1,5 +1,6 @@
-package com.example.userservice.email;
+package com.example.userservice.email.service.impl;
 
+import com.example.userservice.email.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

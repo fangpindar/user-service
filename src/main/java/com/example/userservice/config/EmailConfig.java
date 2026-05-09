@@ -1,9 +1,9 @@
 package com.example.userservice.config;
 
 import com.example.userservice.config.properties.AppProperties;
-import com.example.userservice.email.EmailService;
-import com.example.userservice.email.LoggingEmailService;
-import com.example.userservice.email.SendGridEmailService;
+import com.example.userservice.email.service.EmailService;
+import com.example.userservice.email.service.impl.LoggingEmailService;
+import com.example.userservice.email.service.impl.SendGridEmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;

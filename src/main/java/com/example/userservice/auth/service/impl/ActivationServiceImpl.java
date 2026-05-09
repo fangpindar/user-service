@@ -2,11 +2,11 @@ package com.example.userservice.auth.service.impl;
 
 import com.example.userservice.auth.service.ActivationService;
 import com.example.userservice.common.exception.domain.ActivationTokenInvalidException;
-import com.example.userservice.user.ActivationToken;
-import com.example.userservice.user.ActivationTokenRepository;
-import com.example.userservice.user.User;
-import com.example.userservice.user.UserRepository;
-import com.example.userservice.user.UserStatus;
+import com.example.userservice.user.entity.ActivationToken;
+import com.example.userservice.user.entity.User;
+import com.example.userservice.user.entity.UserStatus;
+import com.example.userservice.user.repository.ActivationTokenRepository;
+import com.example.userservice.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
