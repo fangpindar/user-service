@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:userdb}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3s
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+app:
+  jwt:
+    access-secret: ${JWT_ACCESS_SECRET}
+    refresh-secret: ${JWT_REFRESH_SECRET}
+    access-ttl-minutes: 15
+    refresh-ttl-days: 7
+    issuer: user-service
+  email:
+    from: ${EMAIL_FROM:noreply@example.com}
+    sendgrid-api-key: ${SENDGRID_API_KEY:}
+  activation:
+    base-url: ${APP_BASE_URL:http://localhost:8080}
+    token-ttl-hours: 24
+    resend-cooldown-seconds: 60
+    resend-daily-limit: 5
+  otp:
+    ttl-minutes: 5
+    max-attempts: 3
+    code-length: 6
+  login:
+    fail-lock-threshold: 5
+    fail-lock-window-minutes: 15
+
+logging:
+  level:
+    root: INFO
+    com.example.userservice: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN

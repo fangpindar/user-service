@@ -1,0 +1,38 @@
+# Maven
+target/
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Env (do NOT commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Maven wrapper download cache
+.mvn/wrapper/maven-wrapper.jar
+
+# Build output
+out/
+bin/
+dist/
+
+# Spring Boot DevTools restart trigger
+.reloadtrigger

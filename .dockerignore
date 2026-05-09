@@ -1,0 +1,12 @@
+target/
+.idea/
+.vscode/
+.git/
+.gitignore
+*.iml
+.env
+.env.*
+!.env.example
+README.md
+docs/
+postman/
