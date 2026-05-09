@@ -2,13 +2,13 @@
 
 一個會員服務 API，提供 email 註冊、**雙階段啟用**、**Email OTP 兩階段認證登入**、Refresh Token Rotation、以及自助查詢「最後登入時間」的端點。
 
-作為面試交付專案，展示 production-style 的後端工程實務：Flyway 資料庫 migration、Redis-backed rate limiting、BCrypt 密碼雜湊、OTP 暴力破解防護、JWT access + refresh token rotation 與 blacklist，並用 Testcontainers 在真實 PostgreSQL + Redis 上跑整合測試。
+採用 production-style 的後端工程實務：Flyway 資料庫 migration、Redis-backed rate limiting、BCrypt 密碼雜湊、OTP 暴力破解防護、JWT access + refresh token rotation 與 blacklist，並用 Testcontainers 在真實 PostgreSQL + Redis 上跑整合測試。
 
 ---
 
 ## 線上 Demo
 
-> **Swagger UI**：`http://<ec2-public-dns>/swagger-ui.html`
+> **Swagger UI**：http://ec2-54-178-81-61.ap-northeast-1.compute.amazonaws.com/swagger-ui.html
 
 部署於 AWS EC2（Amazon Linux 2023, t2.micro free tier）使用 docker-compose。URL 為 EC2 default DNS；HTTP only（production 會在 ALB / Caddy / Nginx 終止 TLS，並使用真實 domain + ACM 憑證）。
 
@@ -334,48 +334,3 @@ http://<ec2-public-dns>/swagger-ui.html
 #### 注意事項
 - Container 把 host port 80 對到 app container port 8080（`docker-compose.yml`），所以 URL 不需要帶 port number。
 - 純 HTTP（無 TLS）。Production 會用 Caddy / Nginx + Let's Encrypt（需要您擁有的真實 domain，EC2 default DNS 拿不到憑證）。
-
----
-
-## 故障排除
-
-**收不到啟用 / OTP 信：**
-- 看 `docker compose logs app`：如果 `LoggingEmailService` 觸發，連結 / OTP code 會直接印在那裡。要真的寄信，需設 `SENDGRID_API_KEY` 並把 `EMAIL_FROM` 設成 SendGrid 的 Verified Sender。
-- SendGrid free tier 有時會被分到 spam，請檢查垃圾信件夾。
-
-**收到的 email 顯示連結是 `https://`，但您設的是 `http://`：**
-- SendGrid Click Tracking 預設會包裝所有連結成 `https://*.ct.sendgrid.net/...`，redirect 到您原本的 `http://`。**直接點按鈕會通**（HTTPS → HTTP redirect 是允許的）。
-- 想關掉：SendGrid Dashboard → **Settings → Tracking → Click Tracking** → toggle OFF。
-
-**啟用信內的連結指向 `localhost`：**
-- `.env` 裡的 `APP_BASE_URL` 沒改。在 EC2 上必須是 `http://<ec2-public-dns>`。改完後 `docker compose down && docker compose up -d`。
-
-**`mvn test` 失敗於 Testcontainers errors：**
-- 確認 Docker Desktop 已啟動。第一次跑會 pull `postgres:16-alpine` 與 `redis:7-alpine`。
-
-**EC2 instance 沒響應、SSH 連不上：**
-- t2.micro 只有 1GB RAM。當記憶體吃滿到 OOM 時，整個 instance 會卡住（連 SSH 都連不上）。**解法是加 swap**：
-  ```bash
-  ssh -i ~/.ssh/denden-user-service-key.pem ec2-user@<host>
-  sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
-  sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
-  echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
-  ```
-  本專案的部署 instance 已經做過這步處理，1GB swap 提供足夠的緩衝。
-
-**改了本機 `DB_PASSWORD` 但 app 連不上 DB：**
-- PostgreSQL 只在 volume 第一次建立時用 `POSTGRES_PASSWORD`，之後忽略。改了密碼就要砍 volume：
-  ```bash
-  docker compose down -v   # -v 會刪掉 pgdata volume
-  docker compose up -d
-  ```
-
----
-
-## 已知限制與未來改進
-
-- **HTTP-only 部署（無 TLS）** —— 面試 demo 簡化用。Production 會在 reverse proxy 終止 TLS（ACM / Let's Encrypt 憑證 + 自己擁有的 domain）。
-- **沒 CI/CD pipeline** —— 特意排除作業範圍外。
-- **單一 instance 部署** —— 要 HA 需在 ALB 後放多個 app instance + Redis 主從複製。
-- **沒密碼 reset flow** —— 題目沒要求。
-- **沒 admin / staff 端點** —— 題目只要求個人查詢；`/me/*` 是唯一個人資料端點，刻意這樣設計（避免任何「查別人」的入口）。
