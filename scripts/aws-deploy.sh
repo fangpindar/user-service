@@ -256,12 +256,29 @@ if (( need_install )); then
   sudo usermod -aG docker ec2-user
 fi
 
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+
 if [ ! -x /usr/local/lib/docker/cli-plugins/docker-compose ]; then
-  sudo mkdir -p /usr/local/lib/docker/cli-plugins
   sudo curl -fsSL \
     https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
     -o /usr/local/lib/docker/cli-plugins/docker-compose
   sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+fi
+
+# Buildx is required by compose v2 for `compose up --build`, but Amazon
+# Linux 2023's bundled docker package does not include it.
+if [ ! -x /usr/local/lib/docker/cli-plugins/docker-buildx ]; then
+  BUILDX_VERSION="v0.18.0"
+  ARCH=$(uname -m)
+  case "$ARCH" in
+    x86_64)  BUILDX_ARCH="amd64" ;;
+    aarch64) BUILDX_ARCH="arm64" ;;
+    *)       echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
+  esac
+  sudo curl -fsSL \
+    "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-${BUILDX_ARCH}" \
+    -o /usr/local/lib/docker/cli-plugins/docker-buildx
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 fi
 REMOTE
   ok "Instance bootstrapped"
@@ -285,7 +302,6 @@ REMOTE
   log "Building production .env (with APP_BASE_URL = http://$PUBLIC_DNS)..."
   local tmp_env
   tmp_env=$(mktemp)
-  trap 'rm -f "$tmp_env"' EXIT
   awk -v dns="http://$PUBLIC_DNS" '
     BEGIN { FS="="; OFS="=" }
     /^APP_BASE_URL=/ { print "APP_BASE_URL=" dns; next }
@@ -293,6 +309,7 @@ REMOTE
   ' "$LOCAL_ENV_FILE" > "$tmp_env"
 
   scp_to "$tmp_env" "/home/ec2-user/$REPO_DIR_ON_EC2/.env"
+  rm -f "$tmp_env"
   ok "Synced .env to instance"
 
   log "Bringing up the stack via docker compose..."
