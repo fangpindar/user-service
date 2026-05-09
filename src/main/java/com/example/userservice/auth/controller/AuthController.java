@@ -1,4 +1,4 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.controller;
 
 import com.example.userservice.auth.dto.LoginChallengeResponse;
 import com.example.userservice.auth.dto.LoginRequest;
@@ -11,6 +11,12 @@ import com.example.userservice.auth.dto.VerifyOtpRequest;
 import com.example.userservice.auth.jwt.JwtTokenProvider;
 import com.example.userservice.auth.jwt.JwtTokenProvider.ParsedToken;
 import com.example.userservice.auth.jwt.UserPrincipal;
+import com.example.userservice.auth.service.LoginService;
+import com.example.userservice.auth.service.LogoutService;
+import com.example.userservice.auth.service.OtpService;
+import com.example.userservice.auth.service.RegistrationService;
+import com.example.userservice.auth.service.ResendActivationService;
+import com.example.userservice.auth.service.TokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -1,5 +1,7 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
+import com.example.userservice.auth.service.RegistrationService;
+import com.example.userservice.auth.service.ResendActivationService;
 import com.example.userservice.common.exception.domain.TooManyRequestsException;
 import com.example.userservice.email.EmailService;
 import com.example.userservice.ratelimit.RateLimitService;
@@ -16,9 +18,9 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Service
-public class ResendActivationService {
+public class ResendActivationServiceImpl implements ResendActivationService {
 
-    private static final Logger log = LoggerFactory.getLogger(ResendActivationService.class);
+    private static final Logger log = LoggerFactory.getLogger(ResendActivationServiceImpl.class);
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository tokenRepository;
@@ -26,11 +28,11 @@ public class ResendActivationService {
     private final EmailService emailService;
     private final RateLimitService rateLimitService;
 
-    public ResendActivationService(UserRepository userRepository,
-                                   ActivationTokenRepository tokenRepository,
-                                   RegistrationService registrationService,
-                                   EmailService emailService,
-                                   RateLimitService rateLimitService) {
+    public ResendActivationServiceImpl(UserRepository userRepository,
+                                       ActivationTokenRepository tokenRepository,
+                                       RegistrationService registrationService,
+                                       EmailService emailService,
+                                       RateLimitService rateLimitService) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.registrationService = registrationService;
@@ -38,11 +40,11 @@ public class ResendActivationService {
         this.rateLimitService = rateLimitService;
     }
 
+    @Override
     @Transactional
     public void resend(String email) {
         String normalized = email.trim().toLowerCase();
 
-        // Rate limits checked first to deter abuse regardless of email validity
         if (rateLimitService.isResendOnCooldown(normalized)) {
             throw new TooManyRequestsException(
                     "Please wait before requesting another activation email.");
@@ -53,7 +55,6 @@ public class ResendActivationService {
         }
 
         Optional<User> userOpt = userRepository.findByEmail(normalized);
-        // Always record cooldown to prevent enumeration via timing
         rateLimitService.recordResend(normalized);
 
         if (userOpt.isEmpty()) {

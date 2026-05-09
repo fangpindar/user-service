@@ -1,5 +1,6 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
+import com.example.userservice.auth.service.RegistrationService;
 import com.example.userservice.common.exception.domain.EmailAlreadyRegisteredException;
 import com.example.userservice.common.util.SecureTokenGenerator;
 import com.example.userservice.config.properties.AppProperties;
@@ -19,9 +20,9 @@ import java.time.Duration;
 import java.time.Instant;
 
 @Service
-public class RegistrationService {
+public class RegistrationServiceImpl implements RegistrationService {
 
-    private static final Logger log = LoggerFactory.getLogger(RegistrationService.class);
+    private static final Logger log = LoggerFactory.getLogger(RegistrationServiceImpl.class);
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository tokenRepository;
@@ -30,12 +31,12 @@ public class RegistrationService {
     private final EmailService emailService;
     private final AppProperties appProperties;
 
-    public RegistrationService(UserRepository userRepository,
-                               ActivationTokenRepository tokenRepository,
-                               PasswordEncoder passwordEncoder,
-                               SecureTokenGenerator tokenGenerator,
-                               EmailService emailService,
-                               AppProperties appProperties) {
+    public RegistrationServiceImpl(UserRepository userRepository,
+                                   ActivationTokenRepository tokenRepository,
+                                   PasswordEncoder passwordEncoder,
+                                   SecureTokenGenerator tokenGenerator,
+                                   EmailService emailService,
+                                   AppProperties appProperties) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -44,6 +45,7 @@ public class RegistrationService {
         this.appProperties = appProperties;
     }
 
+    @Override
     @Transactional
     public void register(String email, String rawPassword) {
         String normalizedEmail = email.trim().toLowerCase();
@@ -65,6 +67,7 @@ public class RegistrationService {
         log.info("User registered: id={}, email={}", user.getId(), normalizedEmail);
     }
 
+    @Override
     @Transactional
     public String createActivationToken(Long userId) {
         String tokenValue = tokenGenerator.generateHexToken();
@@ -77,6 +80,7 @@ public class RegistrationService {
         return tokenValue;
     }
 
+    @Override
     public String buildActivationLink(String token) {
         String base = appProperties.activation().baseUrl();
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);

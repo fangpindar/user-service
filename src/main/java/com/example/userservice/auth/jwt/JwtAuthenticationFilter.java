@@ -1,7 +1,7 @@
 package com.example.userservice.auth.jwt;
 
-import com.example.userservice.auth.TokenService;
 import com.example.userservice.auth.jwt.JwtTokenProvider.ParsedToken;
+import com.example.userservice.auth.service.TokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

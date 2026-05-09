@@ -1,10 +1,13 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
+import com.example.userservice.auth.service.LoginService;
+import com.example.userservice.auth.service.OtpService;
+import com.example.userservice.auth.service.TokenService;
 import com.example.userservice.common.exception.domain.AccountLockedException;
 import com.example.userservice.common.exception.domain.AccountNotActiveException;
 import com.example.userservice.common.exception.domain.InvalidCredentialsException;
-import com.example.userservice.email.EmailService;
 import com.example.userservice.config.properties.AppProperties;
+import com.example.userservice.email.EmailService;
 import com.example.userservice.ratelimit.RateLimitService;
 import com.example.userservice.user.LoginAudit;
 import com.example.userservice.user.LoginAuditRepository;
@@ -21,9 +24,9 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Service
-public class LoginService {
+public class LoginServiceImpl implements LoginService {
 
-    private static final Logger log = LoggerFactory.getLogger(LoginService.class);
+    private static final Logger log = LoggerFactory.getLogger(LoginServiceImpl.class);
 
     private final UserRepository userRepository;
     private final LoginAuditRepository loginAuditRepository;
@@ -34,14 +37,14 @@ public class LoginService {
     private final TokenService tokenService;
     private final AppProperties appProperties;
 
-    public LoginService(UserRepository userRepository,
-                        LoginAuditRepository loginAuditRepository,
-                        PasswordEncoder passwordEncoder,
-                        RateLimitService rateLimitService,
-                        OtpService otpService,
-                        EmailService emailService,
-                        TokenService tokenService,
-                        AppProperties appProperties) {
+    public LoginServiceImpl(UserRepository userRepository,
+                            LoginAuditRepository loginAuditRepository,
+                            PasswordEncoder passwordEncoder,
+                            RateLimitService rateLimitService,
+                            OtpService otpService,
+                            EmailService emailService,
+                            TokenService tokenService,
+                            AppProperties appProperties) {
         this.userRepository = userRepository;
         this.loginAuditRepository = loginAuditRepository;
         this.passwordEncoder = passwordEncoder;
@@ -52,9 +55,7 @@ public class LoginService {
         this.appProperties = appProperties;
     }
 
-    /**
-     * Phase 1: validate credentials, issue OTP, send email.
-     */
+    @Override
     @Transactional(readOnly = true)
     public OtpService.Issued startLogin(String email, String rawPassword) {
         String normalized = email.trim().toLowerCase();
@@ -80,9 +81,7 @@ public class LoginService {
         return issued;
     }
 
-    /**
-     * Phase 2: verify OTP, update last-login, issue JWT pair.
-     */
+    @Override
     @Transactional
     public TokenService.TokenPair completeLogin(String challengeId,
                                                 String code,

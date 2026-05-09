@@ -1,5 +1,6 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
+import com.example.userservice.auth.service.ActivationService;
 import com.example.userservice.common.exception.domain.ActivationTokenInvalidException;
 import com.example.userservice.user.ActivationToken;
 import com.example.userservice.user.ActivationTokenRepository;
@@ -14,23 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 @Service
-public class ActivationService {
+public class ActivationServiceImpl implements ActivationService {
 
-    private static final Logger log = LoggerFactory.getLogger(ActivationService.class);
+    private static final Logger log = LoggerFactory.getLogger(ActivationServiceImpl.class);
 
     private final ActivationTokenRepository tokenRepository;
     private final UserRepository userRepository;
 
-    public ActivationService(ActivationTokenRepository tokenRepository,
-                             UserRepository userRepository) {
+    public ActivationServiceImpl(ActivationTokenRepository tokenRepository,
+                                 UserRepository userRepository) {
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
     }
 
-    /**
-     * Read-only validation used by GET /activate to show the confirmation page
-     * without consuming the token.
-     */
+    @Override
     @Transactional(readOnly = true)
     public void validateTokenReadOnly(String token) {
         ActivationToken record = tokenRepository.findByToken(token)
@@ -43,10 +41,7 @@ public class ActivationService {
         }
     }
 
-    /**
-     * Performs actual activation. Called by POST /activate. Marks the token as used
-     * and flips user status to ACTIVE.
-     */
+    @Override
     @Transactional
     public void activate(String token) {
         ActivationToken record = tokenRepository.findByToken(token)
@@ -62,8 +57,6 @@ public class ActivationService {
                 .orElseThrow(ActivationTokenInvalidException::notFound);
 
         if (user.getStatus() != UserStatus.PENDING_ACTIVATION) {
-            // Already activated (or locked/deactivated). Treat as success for idempotency
-            // when status is ACTIVE; otherwise treat as invalid.
             if (user.getStatus() == UserStatus.ACTIVE) {
                 record.setUsedAt(Instant.now());
                 tokenRepository.save(record);

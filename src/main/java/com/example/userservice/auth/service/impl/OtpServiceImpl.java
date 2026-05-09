@@ -1,5 +1,6 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
+import com.example.userservice.auth.service.OtpService;
 import com.example.userservice.common.exception.domain.OtpInvalidException;
 import com.example.userservice.common.util.SecureTokenGenerator;
 import com.example.userservice.config.properties.AppProperties;
@@ -15,9 +16,9 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
-public class OtpService {
+public class OtpServiceImpl implements OtpService {
 
-    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
+    private static final Logger log = LoggerFactory.getLogger(OtpServiceImpl.class);
     private static final String KEY_PREFIX = "otp:";
     private static final String FIELD_USER_ID = "userId";
     private static final String FIELD_CODE_HASH = "codeHash";
@@ -28,16 +29,17 @@ public class OtpService {
     private final PasswordEncoder passwordEncoder;
     private final AppProperties appProperties;
 
-    public OtpService(StringRedisTemplate redis,
-                      SecureTokenGenerator tokenGenerator,
-                      PasswordEncoder passwordEncoder,
-                      AppProperties appProperties) {
+    public OtpServiceImpl(StringRedisTemplate redis,
+                          SecureTokenGenerator tokenGenerator,
+                          PasswordEncoder passwordEncoder,
+                          AppProperties appProperties) {
         this.redis = redis;
         this.tokenGenerator = tokenGenerator;
         this.passwordEncoder = passwordEncoder;
         this.appProperties = appProperties;
     }
 
+    @Override
     public Issued issue(Long userId) {
         String code = tokenGenerator.generateNumericCode(appProperties.otp().codeLength());
         String challengeId = UUID.randomUUID().toString();
@@ -53,6 +55,7 @@ public class OtpService {
         return new Issued(challengeId, code, appProperties.otp().ttlMinutes() * 60L);
     }
 
+    @Override
     public Long verify(String challengeId, String code) {
         String key = KEY_PREFIX + challengeId;
         HashOperations<String, Object, Object> hash = redis.opsForHash();
@@ -92,6 +95,4 @@ public class OtpService {
             return defaultValue;
         }
     }
-
-    public record Issued(String challengeId, String code, long expiresInSeconds) {}
 }

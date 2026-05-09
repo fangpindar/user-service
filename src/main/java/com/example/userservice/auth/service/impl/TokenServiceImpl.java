@@ -1,8 +1,9 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
 import com.example.userservice.auth.jwt.JwtTokenProvider;
 import com.example.userservice.auth.jwt.JwtTokenProvider.IssuedToken;
 import com.example.userservice.auth.jwt.JwtTokenProvider.ParsedToken;
+import com.example.userservice.auth.service.TokenService;
 import com.example.userservice.config.properties.JwtProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,9 +15,9 @@ import java.time.Instant;
 import java.util.Set;
 
 @Service
-public class TokenService {
+public class TokenServiceImpl implements TokenService {
 
-    private static final Logger log = LoggerFactory.getLogger(TokenService.class);
+    private static final Logger log = LoggerFactory.getLogger(TokenServiceImpl.class);
     private static final String KEY_REFRESH_PREFIX = "refresh:";
     private static final String KEY_BLACKLIST_PREFIX = "blacklist:";
 
@@ -24,14 +25,15 @@ public class TokenService {
     private final StringRedisTemplate redis;
     private final JwtProperties jwtProps;
 
-    public TokenService(JwtTokenProvider jwtProvider,
-                        StringRedisTemplate redis,
-                        JwtProperties jwtProps) {
+    public TokenServiceImpl(JwtTokenProvider jwtProvider,
+                            StringRedisTemplate redis,
+                            JwtProperties jwtProps) {
         this.jwtProvider = jwtProvider;
         this.redis = redis;
         this.jwtProps = jwtProps;
     }
 
+    @Override
     public TokenPair issueTokenPair(Long userId, String email) {
         IssuedToken access = jwtProvider.issueAccess(userId, email);
         IssuedToken refresh = jwtProvider.issueRefresh(userId);
@@ -46,10 +48,7 @@ public class TokenService {
         return new TokenPair(access.token(), refresh.token(), accessTtlSeconds);
     }
 
-    /**
-     * Validate refresh token, delete old key (rotation), then issue new pair.
-     * Returns null if the refresh token is invalid or already used (replayed).
-     */
+    @Override
     public TokenPair rotateRefresh(String refreshToken, String email) {
         ParsedToken parsed;
         try {
@@ -69,6 +68,7 @@ public class TokenService {
         return issueTokenPair(parsed.userId(), email);
     }
 
+    @Override
     public void revokeAccess(String accessJti, Instant accessExp) {
         long ttlSeconds = Duration.between(Instant.now(), accessExp).getSeconds();
         if (ttlSeconds > 0) {
@@ -76,6 +76,7 @@ public class TokenService {
         }
     }
 
+    @Override
     public void revokeAllRefreshForUser(Long userId) {
         Set<String> keys = redis.keys(KEY_REFRESH_PREFIX + userId + ":*");
         if (keys != null && !keys.isEmpty()) {
@@ -83,6 +84,7 @@ public class TokenService {
         }
     }
 
+    @Override
     public boolean isAccessBlacklisted(String jti) {
         return Boolean.TRUE.equals(redis.hasKey(blacklistKey(jti)));
     }
@@ -94,6 +96,4 @@ public class TokenService {
     private String blacklistKey(String jti) {
         return KEY_BLACKLIST_PREFIX + jti;
     }
-
-    public record TokenPair(String accessToken, String refreshToken, long expiresInSeconds) {}
 }

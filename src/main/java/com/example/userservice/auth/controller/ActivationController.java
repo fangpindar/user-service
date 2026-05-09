@@ -1,5 +1,6 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.controller;
 
+import com.example.userservice.auth.service.ActivationService;
 import com.example.userservice.common.exception.domain.ActivationTokenInvalidException;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.Operation;

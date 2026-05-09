@@ -1,6 +1,8 @@
-package com.example.userservice.auth;
+package com.example.userservice.auth.service.impl;
 
 import com.example.userservice.auth.jwt.UserPrincipal;
+import com.example.userservice.auth.service.LogoutService;
+import com.example.userservice.auth.service.TokenService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -8,21 +10,17 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 
 @Service
-public class LogoutService {
+public class LogoutServiceImpl implements LogoutService {
 
-    private static final Logger log = LoggerFactory.getLogger(LogoutService.class);
+    private static final Logger log = LoggerFactory.getLogger(LogoutServiceImpl.class);
 
     private final TokenService tokenService;
 
-    public LogoutService(TokenService tokenService) {
+    public LogoutServiceImpl(TokenService tokenService) {
         this.tokenService = tokenService;
     }
 
-    /**
-     * Logout the current user:
-     *   1. Blacklist the access JWT (until its original expiry)
-     *   2. Delete all refresh tokens for the user
-     */
+    @Override
     public void logout(UserPrincipal principal, Instant accessTokenExp) {
         tokenService.revokeAccess(principal.accessJti(), accessTokenExp);
         tokenService.revokeAllRefreshForUser(principal.userId());
