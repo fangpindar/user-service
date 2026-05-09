@@ -201,7 +201,47 @@ src/test/java/com/example/userservice/
 
 ## Deploying to AWS EC2
 
-### Create instance
+### One-command deploy (recommended)
+
+There are two scripts under `scripts/` that automate the whole flow:
+
+```bash
+# Provision EC2 + security group + key pair, then docker compose up.
+# Idempotent — safe to re-run after a `git push`, will redeploy in place.
+./scripts/aws-deploy.sh
+
+# When you're done with the demo, tear everything down so you don't get billed.
+./scripts/aws-teardown.sh
+```
+
+Prerequisites:
+- AWS CLI configured (`aws sts get-caller-identity` works)
+- `jq` installed (`brew install jq`)
+- A filled-in local `.env` (the script validates required values before touching AWS)
+
+Defaults (override via env vars):
+
+| Var | Default |
+|---|---|
+| `AWS_REGION` | `ap-northeast-1` |
+| `INSTANCE_TYPE` | `t2.micro` |
+| `PROJECT_NAME` | `denden-user-service` |
+| `GITHUB_REPO` | `https://github.com/fangpindar/user-service.git` |
+| `GITHUB_BRANCH` | `main` |
+
+What `aws-deploy.sh` does:
+1. Validates `.env` has real values (not placeholders) for `SENDGRID_API_KEY`, JWT secrets, `DB_PASSWORD`, etc.
+2. Creates an SSH key pair (saves private key to `~/.ssh/<project>-key.pem`).
+3. Creates a security group: SSH (22) **only from your current public IP**, HTTP (80) from anywhere.
+4. Looks up the latest Amazon Linux 2023 AMI and launches a `t2.micro` instance.
+5. Installs Docker + git, clones your GitHub repo, scp's `.env` (with `APP_BASE_URL` rewritten to the EC2 public DNS), and runs `docker compose up -d`.
+6. Polls `/actuator/health` until it returns `UP`, then prints the Swagger URL.
+
+Re-running the script after pushing to GitHub will git-pull on the instance and `docker compose up --build`, so iterating is one command.
+
+### Manual setup (only if you don't want the script)
+
+#### Create instance
 - AMI: Amazon Linux 2023
 - Size: t2.micro (free tier; t3.micro also fine)
 - Storage: 20 GB gp3 (free tier covers up to 30 GB)
