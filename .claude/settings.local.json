@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -f /Users/chiahsuan/Desktop/denden-user-service-simple/pom.xml test -Dtest=AuthFlowIntegrationTest)"
+    ]
+  }
+}

@@ -15,6 +15,7 @@ app:
     issuer: user-service-test
   email:
     from: test@example.com
+    from-name: TestSender
     sendgrid-api-key: ""
   activation:
     base-url: http://localhost

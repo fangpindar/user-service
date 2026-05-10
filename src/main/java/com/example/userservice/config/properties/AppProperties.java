@@ -18,6 +18,7 @@ public record AppProperties(
 ) {
     public record Email(
             @NotBlank String from,
+            @NotBlank String fromName,
             String sendgridApiKey
     ) {}
 

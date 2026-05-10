@@ -22,10 +22,12 @@ public class SendGridEmailService implements EmailService {
 
     private final SendGrid sendGrid;
     private final String fromAddress;
+    private final String fromName;
 
     public SendGridEmailService(AppProperties props) {
         this.sendGrid = new SendGrid(props.email().sendgridApiKey());
         this.fromAddress = props.email().from();
+        this.fromName = props.email().fromName();
     }
 
     @Override
@@ -49,7 +51,7 @@ public class SendGridEmailService implements EmailService {
     }
 
     private void sendEmail(String to, String subject, String plainText, String html) {
-        Email from = new Email(fromAddress);
+        Email from = new Email(fromAddress, fromName);
         Email recipient = new Email(to);
         Mail mail = new Mail(from, subject, recipient, new Content("text/plain", plainText));
         mail.addContent(new Content("text/html", html));

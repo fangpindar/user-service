@@ -61,6 +61,7 @@ app:
     issuer: user-service
   email:
     from: ${EMAIL_FROM:noreply@example.com}
+    from-name: ${EMAIL_FROM_NAME:DenDenUserService}
     sendgrid-api-key: ${SENDGRID_API_KEY:}
   activation:
     base-url: ${APP_BASE_URL:http://localhost:8080}
