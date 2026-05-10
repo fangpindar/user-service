@@ -36,3 +36,4 @@ dist/
 
 # Spring Boot DevTools restart trigger
 .reloadtrigger
+.claude/
